@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Toolbox</title>
+    <title>🐿️ squirrelPDF</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- PDF manipulation library -->
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
@@ -83,8 +83,8 @@
     <div class="container mx-auto px-4 py-8 max-w-4xl">
         <div class="bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-10">
             <header class="text-center mb-8">
-                <h1 class="text-3xl md:text-4xl font-bold text-indigo-400">PDF Toolbox</h1>
-                <p class="text-gray-400 mt-2">Merge files, reorder pages, and delete pages. All in your browser.</p>
+                <h1 class="text-3xl md:text-4xl font-bold text-indigo-400">🐿️ squirrelPDF</h1>
+                <p class="text-gray-400 mt-2">Merge, reorder, and organize your PDFs. vibes only. 🌰</p>
             </header>
 
             <main>
@@ -93,7 +93,7 @@
                     <input type="file" id="file-input" class="hidden" multiple accept=".pdf,application/pdf">
                     <div class="flex flex-col items-center">
                         <i class="fa-solid fa-file-arrow-up text-4xl text-gray-500 mb-4"></i>
-                        <p class="text-lg font-medium">Drag & Drop PDF files here</p>
+                        <p class="text-lg font-medium">Drop your PDFs like acorns 🌰</p>
                         <p class="text-gray-400">or</p>
                         <button id="browse-btn" class="mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">Browse Files</button>
                     </div>
@@ -108,7 +108,7 @@
                 <!-- Action Buttons -->
                 <div id="action-buttons" class="mt-8 flex flex-col sm:flex-row gap-4 hidden">
                     <button id="merge-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 text-lg">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i>Merge All PDFs
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>Squirrel 'em Together
                     </button>
                     <button id="reset-btn" class="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 text-lg">
                         <i class="fa-solid fa-trash-can"></i>Reset
@@ -432,7 +432,7 @@
                 const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = "merged-document.pdf";
+                link.download = "squirrel-merged.pdf";
                 link.click();
 
                 toggleModal(loadingModal, false);
