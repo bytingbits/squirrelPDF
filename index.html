@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Toolbox</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PDF manipulation library -->
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <!-- Drag-and-drop library -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <!-- PDF rendering library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .loader {
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            border-left-color: #6366f1;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .file-item { cursor: move; }
+        .page-thumbnail {
+            position: relative;
+            cursor: move;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            background-color: #374151;
+        }
+        .page-thumbnail canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        .page-thumbnail .delete-page-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background-color: rgba(239, 68, 68, 0.9);
+            color: white;
+            border-radius: 9999px;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .page-thumbnail:hover .delete-page-btn {
+            opacity: 1;
+        }
+        .page-thumbnail .page-number {
+            position: absolute;
+            bottom: 0.5rem;
+            left: 0.5rem;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <div class="bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-10">
+            <header class="text-center mb-8">
+                <h1 class="text-3xl md:text-4xl font-bold text-indigo-400">PDF Toolbox</h1>
+                <p class="text-gray-400 mt-2">Merge files, reorder pages, and delete pages. All in your browser.</p>
+            </header>
+
+            <main>
+                <!-- File Drop Area -->
+                <div id="drop-zone" class="border-2 border-dashed border-gray-600 rounded-xl p-8 text-center cursor-pointer hover:border-indigo-400 hover:bg-gray-700/50 transition-colors duration-300">
+                    <input type="file" id="file-input" class="hidden" multiple accept=".pdf,application/pdf">
+                    <div class="flex flex-col items-center">
+                        <i class="fa-solid fa-file-arrow-up text-4xl text-gray-500 mb-4"></i>
+                        <p class="text-lg font-medium">Drag & Drop PDF files here</p>
+                        <p class="text-gray-400">or</p>
+                        <button id="browse-btn" class="mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">Browse Files</button>
+                    </div>
+                </div>
+
+                <!-- File List -->
+                <div id="file-list-container" class="mt-6 hidden">
+                    <h2 class="text-xl font-semibold mb-3">Your Files</h2>
+                    <ul id="file-list" class="space-y-3"></ul>
+                </div>
+
+                <!-- Action Buttons -->
+                <div id="action-buttons" class="mt-8 flex flex-col sm:flex-row gap-4 hidden">
+                    <button id="merge-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 text-lg">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>Merge All PDFs
+                    </button>
+                    <button id="reset-btn" class="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 text-lg">
+                        <i class="fa-solid fa-trash-can"></i>Reset
+                    </button>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Page Editor Modal -->
+    <div id="page-editor-modal" class="modal-backdrop hidden">
+        <div class="bg-gray-800 p-6 rounded-2xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">Edit Pages: <span id="modal-filename" class="text-indigo-400"></span></h2>
+                <button id="close-modal-btn" class="text-gray-400 hover:text-white text-2xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <p class="text-gray-400 mb-4">Drag to reorder pages. Click the X to delete a page.</p>
+            <div id="page-grid-loader" class="flex items-center justify-center py-12">
+                <div class="loader"></div>
+            </div>
+            <div id="page-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-6"></div>
+            <div class="flex gap-4">
+                <button id="save-changes-btn" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                    <i class="fa-solid fa-floppy-disk mr-2"></i>Save Changes
+                </button>
+                <button id="cancel-modal-btn" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Modal -->
+    <div id="loading-modal" class="modal-backdrop hidden"><div class="bg-gray-800 p-8 rounded-2xl flex items-center gap-4 shadow-xl"><div class="loader"></div><p id="loading-message" class="text-lg">Working...</p></div></div>
+    <div id="error-modal" class="modal-backdrop hidden"><div class="bg-gray-800 p-8 rounded-2xl text-center max-w-sm"><i class="fa-solid fa-circle-exclamation text-4xl text-red-500 mb-3"></i><h3 class="text-xl font-bold">An Error Occurred</h3><p id="error-message" class="text-gray-300 my-2"></p><button id="close-error-btn" class="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg">Close</button></div></div>
+
+    <script>
+        const { PDFDocument } = PDFLib;
+        const pdfjsLib = window.pdfjsLib;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+
+        // DOM Elements
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const browseBtn = document.getElementById('browse-btn');
+        const fileListContainer = document.getElementById('file-list-container');
+        const fileList = document.getElementById('file-list');
+        const actionButtons = document.getElementById('action-buttons');
+        const mergeBtn = document.getElementById('merge-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        
+        // Modals
+        const pageEditorModal = document.getElementById('page-editor-modal');
+        const loadingModal = document.getElementById('loading-modal');
+        const errorModal = document.getElementById('error-modal');
+        const loadingMessage = document.getElementById('loading-message');
+        const errorMessage = document.getElementById('error-message');
+        const closeErrorBtn = document.getElementById('close-error-btn');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const cancelModalBtn = document.getElementById('cancel-modal-btn');
+        const saveChangesBtn = document.getElementById('save-changes-btn');
+        const modalFilename = document.getElementById('modal-filename');
+        const pageGrid = document.getElementById('page-grid');
+        const pageGridLoader = document.getElementById('page-grid-loader');
+
+        // State
+        let files = [];
+        let fileListSortable = null;
+        let pageGridSortable = null;
+
+        // --- Event Listeners ---
+        browseBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            fileInput.click();
+        });
+        dropZone.addEventListener('click', () => fileInput.click());
+        ['dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, e => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        });
+        ['dragover'].forEach(eventName => dropZone.addEventListener(eventName, () => dropZone.classList.add('border-indigo-400')));
+        ['dragleave', 'drop'].forEach(eventName => dropZone.addEventListener(eventName, () => dropZone.classList.remove('border-indigo-400')));
+        dropZone.addEventListener('drop', e => handleFileSelection(e.dataTransfer.files));
+        fileInput.addEventListener('change', e => {
+            handleFileSelection(e.target.files);
+            e.target.value = '';
+        });
+
+        mergeBtn.addEventListener('click', mergeAllPdfs);
+        resetBtn.addEventListener('click', () => {
+            files = [];
+            updateUI();
+        });
+        closeErrorBtn.addEventListener('click', () => toggleModal(errorModal, false));
+        closeModalBtn.addEventListener('click', () => toggleModal(pageEditorModal, false));
+        cancelModalBtn.addEventListener('click', () => toggleModal(pageEditorModal, false));
+
+        // --- Helper Functions ---
+        function toggleModal(modal, show, message = '') {
+            if (show) {
+                modal.classList.remove('hidden');
+                if (message && modal === loadingModal) loadingMessage.textContent = message;
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            toggleModal(errorModal, true);
+        }
+
+        async function handleFileSelection(fileList) {
+            const pdfFiles = Array.from(fileList).filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+            if (pdfFiles.length === 0) {
+                showError('Please select valid PDF files.');
+                return;
+            }
+            toggleModal(loadingModal, true, `Loading ${pdfFiles.length} file(s)...`);
+            for (const file of pdfFiles) {
+                try {
+                    const buffer = await file.arrayBuffer();
+                    const pdfDoc = await PDFDocument.load(buffer);
+                    files.push({
+                        id: Date.now() + Math.random(),
+                        name: file.name,
+                        originalBuffer: buffer,
+                        pdfDoc: pdfDoc,
+                        pageIndices: pdfDoc.getPageIndices(),
+                    });
+                } catch (e) {
+                    showError(`Could not process "${file.name}". It might be corrupt or password-protected.`);
+                }
+            }
+            toggleModal(loadingModal, false);
+            updateUI();
+        }
+
+        function updateUI() {
+            fileList.innerHTML = '';
+            if (files.length > 0) {
+                fileListContainer.classList.remove('hidden');
+                actionButtons.classList.remove('hidden');
+
+                files.forEach(file => {
+                    const li = document.createElement('li');
+                    li.className = 'file-item bg-gray-700/50 p-3 rounded-lg flex items-center justify-between gap-4';
+                    li.dataset.id = file.id;
+                    li.innerHTML = `
+                        <div class="flex items-center gap-3 overflow-hidden flex-grow">
+                           <i class="fa-solid fa-grip-vertical text-gray-500 cursor-move"></i>
+                           <i class="fa-regular fa-file-pdf text-indigo-400 text-xl"></i>
+                           <span class="font-medium truncate">${file.name}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-gray-400 text-sm whitespace-nowrap">${file.pageIndices.length} page(s)</span>
+                            <button class="edit-file-btn bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-1 px-3 rounded transition-colors" data-id="${file.id}">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                            </button>
+                            <button class="remove-file-btn bg-red-600 hover:bg-red-700 text-white font-semibold py-1 px-3 rounded transition-colors" data-id="${file.id}">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+                    `;
+                    fileList.appendChild(li);
+                });
+
+                // Attach listeners
+                document.querySelectorAll('.edit-file-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        openPageEditor(parseInt(btn.dataset.id));
+                    });
+                });
+                document.querySelectorAll('.remove-file-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        files = files.filter(f => f.id !== parseInt(btn.dataset.id));
+                        updateUI();
+                    });
+                });
+
+                // Initialize Sortable for file list
+                if (fileListSortable) fileListSortable.destroy();
+                fileListSortable = new Sortable(fileList, {
+                    animation: 150,
+                    handle: '.fa-grip-vertical',
+                    ghostClass: 'opacity-50',
+                    onEnd: function(evt) {
+                        const newOrder = Array.from(fileList.children).map(li => parseInt(li.dataset.id));
+                        files = newOrder.map(id => files.find(f => f.id === id));
+                    }
+                });
+            } else {
+                fileListContainer.classList.add('hidden');
+                actionButtons.classList.add('hidden');
+            }
+        }
+
+        async function openPageEditor(fileId) {
+            const file = files.find(f => f.id === fileId);
+            if (!file) return;
+
+            modalFilename.textContent = file.name;
+            pageGrid.innerHTML = '';
+            pageGrid.style.display = 'none';
+            pageGridLoader.style.display = 'flex';
+            toggleModal(pageEditorModal, true);
+
+            // Render thumbnails
+            const pagesToRender = file.pageIndices.map(idx => ({ originalIndex: idx, file: file }));
+            for (const pageInfo of pagesToRender) {
+                const thumbnail = await renderPageThumbnail(pageInfo.file.originalBuffer, pageInfo.originalIndex);
+                thumbnail.dataset.originalIndex = pageInfo.originalIndex;
+                pageGrid.appendChild(thumbnail);
+            }
+
+            pageGridLoader.style.display = 'none';
+            pageGrid.style.display = 'grid';
+
+            // Initialize Sortable for page grid
+            if (pageGridSortable) pageGridSortable.destroy();
+            pageGridSortable = new Sortable(pageGrid, {
+                animation: 150,
+                ghostClass: 'opacity-50',
+            });
+
+            // Attach delete handlers
+            document.querySelectorAll('.delete-page-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    btn.closest('.page-thumbnail').remove();
+                });
+            });
+
+            // Save changes handler
+            saveChangesBtn.onclick = () => savePageChanges(fileId);
+        }
+
+        async function renderPageThumbnail(pdfBuffer, pageIndex) {
+            const loadingTask = pdfjsLib.getDocument({ data: pdfBuffer });
+            const pdf = await loadingTask.promise;
+            const page = await pdf.getPage(pageIndex + 1);
+            
+            const scale = 0.5;
+            const viewport = page.getViewport({ scale: scale });
+            
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            await page.render({ canvasContext: context, viewport: viewport }).promise;
+
+            const thumbnailDiv = document.createElement('div');
+            thumbnailDiv.className = 'page-thumbnail';
+            thumbnailDiv.innerHTML = `
+                <div class="delete-page-btn">
+                    <i class="fa-solid fa-xmark"></i>
+                </div>
+                <div class="page-number">Page ${pageIndex + 1}</div>
+            `;
+            thumbnailDiv.appendChild(canvas);
+
+            return thumbnailDiv;
+        }
+
+        async function savePageChanges(fileId) {
+            toggleModal(loadingModal, true, "Saving changes...");
+            const file = files.find(f => f.id === fileId);
+            const thumbnailElements = Array.from(pageGrid.children);
+            const newPageIndices = thumbnailElements.map(t => parseInt(t.dataset.originalIndex));
+
+            if (newPageIndices.length === 0) {
+                 files = files.filter(f => f.id !== fileId);
+            } else {
+                file.pageIndices = newPageIndices;
+            }
+            
+            toggleModal(loadingModal, false);
+            toggleModal(pageEditorModal, false);
+            updateUI();
+        }
+
+        async function mergeAllPdfs() {
+            if (files.length < 1) {
+                showError("Please add at least one file.");
+                return;
+            }
+            if (files.length === 1 && files[0].pageIndices.length === files[0].pdfDoc.getPageCount()) {
+                showError("Only one file is present and it hasn't been edited. Add more files to merge.");
+                return;
+            }
+
+
+            toggleModal(loadingModal, true, "Merging PDFs...");
+            try {
+                const mergedPdf = await PDFDocument.create();
+                for (const file of files) { // files array is already sorted by SortableJS
+                    // Create a temporary document with only the selected pages in the correct order
+                    const tempDoc = await PDFDocument.create();
+                    const copiedPages = await tempDoc.copyPages(file.pdfDoc, file.pageIndices);
+                    copiedPages.forEach(page => tempDoc.addPage(page));
+
+                    // Now copy the pages from the correctly ordered temporary doc
+                    const finalCopiedPages = await mergedPdf.copyPages(tempDoc, tempDoc.getPageIndices());
+                    finalCopiedPages.forEach(page => mergedPdf.addPage(page));
+                }
+
+                if (mergedPdf.getPageCount() === 0) {
+                    showError('No pages were left to merge. Please check your selections.');
+                    toggleModal(loadingModal, false);
+                    return;
+                }
+
+                const mergedPdfBytes = await mergedPdf.save();
+                const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = "merged-document.pdf";
+                link.click();
+
+                toggleModal(loadingModal, false);
+            } catch (err) {
+                console.error(err);
+                showError('An error occurred while merging the PDFs. Please try again.');
+                toggleModal(loadingModal, false);
+            }
+        }
+    </script>
+</body>
+</html>
